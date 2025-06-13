@@ -1,0 +1,23 @@
+services:
+  mysql:
+    container_name: mysqlSniper
+    volumes:
+      - mysqlSniperVolumes:/var/lib/mysql
+    image: mysql:8.0
+    platform: linux/amd64
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "admin"
+    expose:
+      - "3306"
+    ports:
+      - "3306:3306"
+    networks:
+      - sniper
+
+volumes:
+  mysqlSniperVolumes:
+
+networks:
+  sniper:
+    driver: bridge
