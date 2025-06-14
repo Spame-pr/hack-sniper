@@ -5,35 +5,7 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fb3928ca-9124-4edd-a14d-9b2a78839709" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Dockerfile" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Dockerfile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/Makefile" beforeDir="false" afterPath="$PROJECT_DIR$/backend/Makefile" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/bin/bot" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/bin/create-pair" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/bin/rpc" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/cmd/bot/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/cmd/rpc/main.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/rpc/main.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/bot/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/bot/service.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/bundle/manager.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/bundle/manager.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/config/config.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/db/db.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/db/db.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/abi.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/abi.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/bribe_helper.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/bribe_helper.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/contracts.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/contracts.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/dex.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/dex.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/factory.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/factory.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/pair.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/pair.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/sniper_contract.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/sniper_contract.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/dex/uniswap.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/uniswap.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/rpc/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/rpc/rpc/service.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/internal/wallet/manager.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/wallet/manager.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/deploy-contract.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/setup.sh" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/test-bot-api.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/test-lp-detection.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/test-mysql.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/test-rpc.go" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/test-wallet.go" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/backend/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" afterDir="false" />
