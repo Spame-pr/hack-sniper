@@ -5,10 +5,12 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="fb3928ca-9124-4edd-a14d-9b2a78839709" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/backend/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/backend/.env.example" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/contracts/foundry.toml" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/foundry.toml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/contracts/script/Sniper.s.sol" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/script/Sniper.s.sol" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -44,7 +46,7 @@
     "git-widget-placeholder": "master",
     "go.import.settings.migrated": "true",
     "go.sdk.automatically.set": "true",
-    "last_opened_file_path": "/Users/andrii/Desktop/sniper-bot/backend/services/bot/api",
+    "last_opened_file_path": "/Users/andrii/Desktop/sniper-bot/contracts",
     "node.js.detected.package.eslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
     "nodejs_package_manager_path": "npm",
@@ -53,6 +55,7 @@
 }]]></component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/contracts" />
       <recent name="$PROJECT_DIR$/backend/services/bot/api" />
       <recent name="$PROJECT_DIR$/backend" />
       <recent name="$PROJECT_DIR$/contracts/script" />

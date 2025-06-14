@@ -11,3 +11,4 @@ contract SniperDeployScript is Script {
         Sniper sniperContract = new Sniper(address(0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24));
     }
 }
+//Base contract 0xa71940cb90C8F3634DD3AB6a992D0EFF056Db48d
