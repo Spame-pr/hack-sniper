@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 import {Test, console} from "forge-std/Test.sol";
-import {SniperContract} from "../src/SniperContract.sol";
+import {Sniper} from "../src/Sniper.sol";
 
 // Mock contracts for testing
 contract MockERC20 {
@@ -68,7 +68,7 @@ contract MockUniswapRouter {
 }
 
 contract SniperContractTest is Test {
-    SniperContract public sniperContract;
+    Sniper public sniperContract;
     MockUniswapRouter public mockRouter;
     MockERC20 public mockToken;
     MockERC20 public mockWETH;
@@ -104,7 +104,7 @@ contract SniperContractTest is Test {
         mockRouter = new MockUniswapRouter(address(mockWETH));
         
         // Deploy SniperContract
-        sniperContract = new SniperContract(address(mockRouter));
+        sniperContract = new Sniper(address(mockRouter));
         
         // Set up token price (1 ETH = 1000 tokens)
         mockRouter.setTokenPrice(address(mockToken), 1e15); // 0.001 ETH per token
