@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"os"
 )
 
@@ -33,10 +32,13 @@ type Config struct {
 	// DEX
 	UniswapV2Router  string
 	UniswapV2Factory string
+
+	// Auth
+	AuthKey string
 }
 
 // Load loads configuration from environment variables
-func Load() (*Config, error) {
+func Load() *Config {
 	config := &Config{
 		TelegramBotToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
 		BaseRPCURL:          getEnvWithFallback("BASE_SEPOLIA_RPC_URL", "BASE_RPC_URL"),
@@ -45,6 +47,7 @@ func Load() (*Config, error) {
 		DatabaseURL:         os.Getenv("DATABASE_URL"),
 		UniswapV2Router:     os.Getenv("UNISWAP_V2_ROUTER"),
 		UniswapV2Factory:    os.Getenv("UNISWAP_V2_FACTORY"),
+		AuthKey:             os.Getenv("AUTH_KEY"),
 	}
 
 	// Set default values for Base Sepolia testnet
@@ -67,10 +70,5 @@ func Load() (*Config, error) {
 		config.UniswapV2Factory = "0x7Ae58f10f7849cA6F5fB71b7f45CB416c9204b1e" // Base Sepolia Factory
 	}
 
-	// Validate required fields
-	if config.TelegramBotToken == "" {
-		return nil, fmt.Errorf("TELEGRAM_BOT_TOKEN is required")
-	}
-
-	return config, nil
+	return config
 }

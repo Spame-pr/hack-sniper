@@ -14,7 +14,7 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 # Copy source code
-COPY . .
+COPY .. .
 
 # Build the applications
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o bin/bot cmd/bot/main.go

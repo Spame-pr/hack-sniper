@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/big"
 	"net/http"
+	"os"
 	"sync"
 
 	"sniper-bot/internal/config"
@@ -29,6 +30,7 @@ type Service struct {
 	server     *http.Server
 	mu         sync.RWMutex
 	snipeBids  map[string][]*SnipeBid // map[tokenAddress][]*SnipeBid
+	botAPIURL  string
 }
 
 // SnipeBid represents a sniper's bid for a token
@@ -37,6 +39,13 @@ type SnipeBid struct {
 	TokenAddress common.Address
 	BribeAmount  *big.Int
 	Wallet       common.Address
+}
+
+// LPAddNotificationPayload represents the payload sent to bot service
+type LPAddNotificationPayload struct {
+	TokenAddress   string `json:"tokenAddress"`
+	CreatorAddress string `json:"creatorAddress"`
+	TxCallData     string `json:"txCallData"`
 }
 
 // Function selectors for Uniswap V2
@@ -54,11 +63,18 @@ func NewService(cfg *config.Config, database *db.DB) (*Service, error) {
 		return nil, fmt.Errorf("failed to connect to Base: %v", err)
 	}
 
+	// Get bot service configuration
+	botAPIURL := os.Getenv("BOT_API_URL")
+	if botAPIURL == "" {
+		botAPIURL = "http://localhost:8080" // Default for local development
+	}
+
 	return &Service{
 		config:     cfg,
 		db:         database,
 		baseClient: client,
 		snipeBids:  make(map[string][]*SnipeBid),
+		botAPIURL:  botAPIURL,
 	}, nil
 }
 
@@ -79,15 +95,6 @@ func (s *Service) Start() error {
 // Stop stops the RPC service
 func (s *Service) Stop() error {
 	return s.server.Shutdown(context.Background())
-}
-
-// AddSnipeBid adds a new snipe bid
-func (s *Service) AddSnipeBid(bid *SnipeBid) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	tokenAddr := bid.TokenAddress.Hex()
-	s.snipeBids[tokenAddr] = append(s.snipeBids[tokenAddr], bid)
 }
 
 func (s *Service) handleRPC(w http.ResponseWriter, r *http.Request) {
@@ -125,7 +132,6 @@ func (s *Service) handleRPC(w http.ResponseWriter, r *http.Request) {
 	// Handle eth_sendRawTransaction
 	var params []string
 	if err := json.Unmarshal(req.Params, &params); err != nil {
-		log.Printf("Error unmarshaling params: %v", err)
 		http.Error(w, "Invalid transaction parameters", http.StatusBadRequest)
 		return
 	}
@@ -135,11 +141,10 @@ func (s *Service) handleRPC(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	txHex := params[0]
-	log.Printf("Received transaction: %s", txHex)
+	txCallData := params[0]
 
 	// Decode transaction
-	txData, err := hexutil.Decode(txHex)
+	txData, err := hexutil.Decode(txCallData)
 	if err != nil {
 		http.Error(w, "Invalid transaction hex", http.StatusBadRequest)
 		return
@@ -150,21 +155,6 @@ func (s *Service) handleRPC(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid transaction data", http.StatusBadRequest)
 		return
 	}
-	fmt.Printf("Transaction: %s\n", tx.Hash().Hex())
-
-	// Check if this is a createPair transaction
-	if s.isCreatePairTransaction(tx) {
-		tokenA, tokenB, err := s.extractTokensFromCreatePair(tx)
-		if err != nil {
-			log.Printf("Error extracting tokens from createPair: %v", err)
-		} else {
-			log.Printf("🎯 CREATE_PAIR transaction detected: %s", tx.Hash().Hex())
-			log.Printf("   TokenA: %s", tokenA.Hex())
-			log.Printf("   TokenB: %s", tokenB.Hex())
-
-			// TODO: Store this information for sniping
-		}
-	}
 
 	// Check if this is an addLiquidityETH transaction
 	if s.isAddLiquidityTransaction(tx) {
@@ -172,34 +162,24 @@ func (s *Service) handleRPC(w http.ResponseWriter, r *http.Request) {
 		if err != nil {
 			log.Printf("Error extracting token from addLiquidity: %v", err)
 		} else {
-			log.Printf("🎯 ADD_LIQUIDITY transaction detected: %s", tx.Hash().Hex())
-			log.Printf("   Token: %s", token.Hex())
+			// Extract the sender (token creator) from the transaction
+			sender, err := s.extractSenderFromTransaction(tx)
+			if err != nil {
+				log.Printf("Error extracting sender from addLiquidity: %v", err)
+			} else {
+				log.Printf("🎯 ADD_LIQUIDITY transaction detected: %s", tx.Hash().Hex())
+				log.Printf("   Token: %s", token.Hex())
+				log.Printf("   Creator (Sender): %s", sender.Hex())
 
-			// TODO: This is where you'd trigger sniping logic
+				if err := s.notifyBotService(token, sender, txCallData); err != nil {
+					log.Printf("❌ Failed to notify bot service: %v", err)
+				}
+			}
 		}
 	}
 
-	return
-
 	// Forward the transaction to Base
 	s.forwardToBase(w, body, true)
-}
-
-func (s *Service) isCreatePairTransaction(tx *types.Transaction) bool {
-	// Check if transaction has data
-	if len(tx.Data()) < 4 {
-		return false
-	}
-
-	// Check if the transaction is sent to the factory address
-	factoryAddr := common.HexToAddress(s.config.UniswapV2Factory)
-	if tx.To() == nil || *tx.To() != factoryAddr {
-		return false
-	}
-
-	// Check if the function selector matches createPair
-	selector := tx.Data()[:4]
-	return bytes.Equal(selector, createPairSelector)
 }
 
 func (s *Service) isAddLiquidityTransaction(tx *types.Transaction) bool {
@@ -248,6 +228,79 @@ func (s *Service) extractTokenFromAddLiquidity(tx *types.Transaction) (token com
 	token = common.BytesToAddress(data[12:32])
 
 	return token, nil
+}
+
+func (s *Service) extractSenderFromTransaction(tx *types.Transaction) (common.Address, error) {
+	// Get the chain ID from the base client
+	chainID, err := s.baseClient.ChainID(context.Background())
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to get chain ID: %v", err)
+	}
+
+	// Create the appropriate signer based on the transaction type
+	var signer types.Signer
+
+	// Check if it's a legacy transaction or EIP-155
+	if tx.Type() == types.LegacyTxType {
+		// For legacy transactions, use EIP155 signer
+		signer = types.NewEIP155Signer(chainID)
+	} else {
+		// For EIP-1559 and other transaction types, use LatestSigner
+		signer = types.LatestSigner(nil)
+	}
+
+	// Extract the sender using the signer
+	sender, err := types.Sender(signer, tx)
+	if err != nil {
+		return common.Address{}, fmt.Errorf("failed to extract sender: %v", err)
+	}
+
+	return sender, nil
+}
+
+// notifyBotService sends LP_ADD notification to the bot service
+func (s *Service) notifyBotService(tokenAddress, creatorAddress common.Address, txCallData string) error {
+	// Prepare payload
+	payload := LPAddNotificationPayload{
+		TokenAddress:   tokenAddress.Hex(),
+		CreatorAddress: creatorAddress.Hex(),
+		TxCallData:     txCallData,
+	}
+
+	// Convert to JSON
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %v", err)
+	}
+
+	// Create HTTP request
+	url := s.botAPIURL + "/api/lp-add"
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %v", err)
+	}
+	cfg := config.Load()
+
+	// Set headers
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+cfg.AuthKey)
+
+	// Make the request
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return fmt.Errorf("failed to send request: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Check response status
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("bot service returned status %d: %s", resp.StatusCode, string(body))
+	}
+
+	log.Printf("✅ Successfully notified bot service about LP_ADD")
+	return nil
 }
 
 func (s *Service) forwardToBase(w http.ResponseWriter, requestBody []byte, isToSequencer bool) {

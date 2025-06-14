@@ -263,6 +263,62 @@ For support and questions:
 - [ ] Enhanced MEV protection mechanisms
 - [ ] Mobile app for snipers
 
+## 🔫 Bot Service HTTP API
+
+The bot service now includes an HTTP server with the following endpoints:
+
+#### Endpoints
+
+1. **Health Check**
+   ```
+   GET /health
+   Response: "OK" (200)
+   ```
+
+2. **LP_ADD Notification**
+   ```
+   POST /api/lp-add
+   Authorization: Bearer <BOT_API_KEY>
+   Content-Type: application/json
+   
+   Payload:
+   {
+     "tokenAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+     "creatorAddress": "0x8e3cf8fe85a40c70a56f128f8e444c7ea864480d",
+     "txCallData": "0xf305d719000000000000000000000000742d35cc..."
+   }
+   
+   Response:
+   {
+     "status": "success",
+     "message": "LP_ADD notification received and processed",
+     "data": {
+       "tokenAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+       "creatorAddress": "0x8e3cf8fe85a40c70a56f128f8e444c7ea864480d"
+     }
+   }
+   ```
+
+#### Configuration
+
+Add these environment variables:
+
+```bash
+# Bot HTTP server configuration
+BOT_HTTP_PORT=8080                    # Port for HTTP server (default: 8080)
+BOT_API_KEY=your-secure-api-key-here  # API key for authentication
+
+# RPC service configuration  
+BOT_API_URL=http://localhost:8080     # Bot service URL (default: http://localhost:8080)
+```
+
+#### Testing
+
+```bash
+# Test the API
+go run scripts/test-bot-api.go
+```
+
 ---
 
 **Built with ❤️ for the DeFi community** 

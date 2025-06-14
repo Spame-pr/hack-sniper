@@ -20,10 +20,7 @@ func main() {
 		log.Printf("Warning: .env file not found: %v", err)
 	}
 
-	cfg, err := config.Load()
-	if err != nil {
-		log.Fatalf("Failed to load configuration: %v", err)
-	}
+	cfg := config.Load()
 
 	// Initialize database
 	database, err := db.New(cfg.DatabaseURL)
