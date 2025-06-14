@@ -35,37 +35,38 @@ func main() {
 
 	fmt.Println("✅ Database schema initialized successfully!")
 
-	// Test creating a snipe bid
-	fmt.Println("🧪 Testing snipe bid creation...")
-	bid := &db.SnipeBid{
+	// Test creating a snipe
+	fmt.Println("🧪 Testing snipe creation...")
+	snipe := &db.Snipe{
 		UserID:       "test_user_123",
 		TokenAddress: "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
+		Amount:       "1.0",
 		BribeAmount:  "0.1",
 		Wallet:       "0x1234567890123456789012345678901234567890",
 	}
 
-	if err := database.CreateSnipeBid(bid); err != nil {
-		log.Fatalf("❌ Failed to create snipe bid: %v", err)
+	if err := database.CreateSnipe(snipe); err != nil {
+		log.Fatalf("❌ Failed to create snipe: %v", err)
 	}
 
-	fmt.Printf("✅ Created snipe bid with ID: %d\n", bid.ID)
+	fmt.Printf("✅ Created snipe with ID: %d\n", snipe.ID)
 
-	// Test retrieving snipe bids
-	fmt.Println("🔍 Testing snipe bid retrieval...")
-	bids, err := database.GetSnipeBidsByToken(bid.TokenAddress)
+	// Test retrieving snipes
+	fmt.Println("🔍 Testing snipe retrieval...")
+	snipes, err := database.GetSnipesByToken(snipe.TokenAddress)
 	if err != nil {
-		log.Fatalf("❌ Failed to retrieve snipe bids: %v", err)
+		log.Fatalf("❌ Failed to retrieve snipes: %v", err)
 	}
 
-	fmt.Printf("✅ Retrieved %d snipe bid(s) for token %s\n", len(bids), bid.TokenAddress)
+	fmt.Printf("✅ Retrieved %d snipe(s) for token %s\n", len(snipes), snipe.TokenAddress)
 
-	// Test updating snipe bid status
-	fmt.Println("📝 Testing snipe bid status update...")
-	if err := database.UpdateSnipeBidStatus(bid.ID, "completed"); err != nil {
-		log.Fatalf("❌ Failed to update snipe bid status: %v", err)
+	// Test updating snipe status
+	fmt.Println("📝 Testing snipe status update...")
+	if err := database.UpdateSnipeStatus(snipe.ID, "completed"); err != nil {
+		log.Fatalf("❌ Failed to update snipe status: %v", err)
 	}
 
-	fmt.Println("✅ Updated snipe bid status successfully!")
+	fmt.Println("✅ Updated snipe status successfully!")
 
 	fmt.Println("🎉 All MySQL tests passed!")
 }

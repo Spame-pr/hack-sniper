@@ -5,14 +5,23 @@ import (
 	"os"
 )
 
+// getEnvWithFallback tries the primary env var first, then falls back to secondary
+func getEnvWithFallback(primary, secondary string) string {
+	if value := os.Getenv(primary); value != "" {
+		return value
+	}
+	return os.Getenv(secondary)
+}
+
 // Config holds all configuration for the application
 type Config struct {
 	// Telegram Bot
 	TelegramBotToken string
 
 	// Base Network
-	BaseRPCURL string
-	BaseWSURL  string
+	BaseRPCURL          string
+	BaseSequencerRPCURL string
+	BaseWSURL           string
 
 	// Database (MySQL)
 	DatabaseURL string
@@ -29,29 +38,33 @@ type Config struct {
 // Load loads configuration from environment variables
 func Load() (*Config, error) {
 	config := &Config{
-		TelegramBotToken: os.Getenv("TELEGRAM_BOT_TOKEN"),
-		BaseRPCURL:       os.Getenv("BASE_RPC_URL"),
-		BaseWSURL:        os.Getenv("BASE_WS_URL"),
-		DatabaseURL:      os.Getenv("DATABASE_URL"),
-		UniswapV2Router:  os.Getenv("UNISWAP_V2_ROUTER"),
-		UniswapV2Factory: os.Getenv("UNISWAP_V2_FACTORY"),
+		TelegramBotToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
+		BaseRPCURL:          getEnvWithFallback("BASE_SEPOLIA_RPC_URL", "BASE_RPC_URL"),
+		BaseSequencerRPCURL: getEnvWithFallback("BASE_SEQUENCER_RPC_URL", "BASE_SEPOLIA_RPC_URL"),
+		BaseWSURL:           os.Getenv("BASE_WS_URL"),
+		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		UniswapV2Router:     os.Getenv("UNISWAP_V2_ROUTER"),
+		UniswapV2Factory:    os.Getenv("UNISWAP_V2_FACTORY"),
 	}
 
-	// Set default values
+	// Set default values for Base Sepolia testnet
 	if config.BaseRPCURL == "" {
-		config.BaseRPCURL = "https://mainnet.base.org"
+		config.BaseRPCURL = "https://sepolia.base.org"
+	}
+	if config.BaseSequencerRPCURL == "" {
+		config.BaseSequencerRPCURL = "https://sepolia.base.org" // fallback to same as BaseRPCURL
 	}
 	if config.BaseWSURL == "" {
-		config.BaseWSURL = "wss://mainnet.base.org"
+		config.BaseWSURL = "wss://sepolia.base.org"
 	}
 	if config.DatabaseURL == "" {
-		config.DatabaseURL = "root:admin@tcp(localhost:3306)/sniper_bot?charset=utf8mb4&parseTime=True&loc=Local"
+		config.DatabaseURL = "root:admin@tcp(localhost:3306)/sniper?charset=utf8mb4&parseTime=True&loc=Local"
 	}
 	if config.UniswapV2Router == "" {
-		config.UniswapV2Router = "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24"
+		config.UniswapV2Router = "0x1689E7B1F10000AE47eBfE339a4f69dECd19F602" // Base Sepolia Router
 	}
 	if config.UniswapV2Factory == "" {
-		config.UniswapV2Factory = "0x8909dc15e40173ff4699343b6eb8132c65e18ec6"
+		config.UniswapV2Factory = "0x7Ae58f10f7849cA6F5fB71b7f45CB416c9204b1e" // Base Sepolia Factory
 	}
 
 	// Validate required fields

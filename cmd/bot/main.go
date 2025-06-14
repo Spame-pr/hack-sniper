@@ -32,16 +32,11 @@ func main() {
 	}
 	defer database.Close()
 
-	// Initialize database schema
-	if err := database.InitSchema(); err != nil {
-		log.Fatalf("Failed to initialize database schema: %v", err)
-	}
-
 	// Initialize wallet manager with database
 	walletManager := wallet.NewManager(database)
 
-	// Initialize bot service
-	botService, err := bot.NewService(walletManager)
+	// Initialize bot service with database
+	botService, err := bot.NewService(walletManager, database)
 	if err != nil {
 		log.Fatalf("Failed to create bot service: %v", err)
 	}

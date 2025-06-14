@@ -1,4 +1,4 @@
-.PHONY: build run-bot run-rpc clean test deps test-mysql
+.PHONY: build run-bot run-rpc clean test deps test-mysql test-rpc create-pair test-lp-detection
 
 # Build all binaries
 build: build-bot build-rpc
@@ -31,6 +31,21 @@ test:
 # Test MySQL connection
 test-mysql:
 	go run scripts/test-mysql.go
+
+# Test RPC proxy
+test-rpc:
+	@echo "🧪 Testing RPC Proxy..."
+	@go run scripts/test-rpc.go
+
+# Create Uniswap pair and add liquidity
+create-pair:
+	@echo "🚀 Creating Uniswap V2 pair and adding liquidity..."
+	@go run scripts/create-pair.go
+
+# Test LP_ADD detection
+test-lp-detection:
+	@echo "🧪 Testing LP_ADD detection..."
+	@go run scripts/test-lp-detection.go
 
 # Clean build artifacts
 clean:

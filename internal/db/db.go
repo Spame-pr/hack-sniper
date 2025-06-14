@@ -33,17 +33,18 @@ type Wallet struct {
 	TelegramUserID string
 	WalletAddress  string
 	PrivateKey     string
-	CreatedAt      time.Time
+	CreatedAt      string
 }
 
-// SnipeBid represents a sniper's bid in the database
-type SnipeBid struct {
+// Snipe represents a sniper's bid in the database
+type Snipe struct {
 	ID           int64
 	UserID       string
 	TokenAddress string
+	Amount       string
 	BribeAmount  string
 	Wallet       string
-	CreatedAt    time.Time
+	CreatedAt    string
 	Status       string
 }
 
@@ -81,6 +82,7 @@ func (db *DB) GetWalletByTelegramUserID(telegramUserID string) (*Wallet, error) 
 		FROM wallets
 		WHERE telegram_user_id = ?
 	`
+	fmt.Println("telegramUserID", telegramUserID)
 
 	wallet := &Wallet{}
 	err := db.QueryRow(query, telegramUserID).Scan(
@@ -97,19 +99,20 @@ func (db *DB) GetWalletByTelegramUserID(telegramUserID string) (*Wallet, error) 
 	return wallet, nil
 }
 
-// CreateSnipeBid creates a new snipe bid
-func (db *DB) CreateSnipeBid(bid *SnipeBid) error {
+// CreateSnipe creates a new snipe
+func (db *DB) CreateSnipe(snipe *Snipe) error {
 	query := `
-		INSERT INTO snipe_bids (user_id, token_address, bribe_amount, wallet, created_at, status)
-		VALUES (?, ?, ?, ?, ?, ?)
+		INSERT INTO snipes (user_id, token_address, amount, bribe_amount, wallet, created_at, status)
+		VALUES (?, ?, ?, ?, ?, ?, ?)
 	`
 
 	result, err := db.Exec(
 		query,
-		bid.UserID,
-		bid.TokenAddress,
-		bid.BribeAmount,
-		bid.Wallet,
+		snipe.UserID,
+		snipe.TokenAddress,
+		snipe.Amount,
+		snipe.BribeAmount,
+		snipe.Wallet,
 		time.Now(),
 		"pending",
 	)
@@ -122,15 +125,15 @@ func (db *DB) CreateSnipeBid(bid *SnipeBid) error {
 		return err
 	}
 
-	bid.ID = id
+	snipe.ID = id
 	return nil
 }
 
-// GetSnipeBidsByToken gets all snipe bids for a token
-func (db *DB) GetSnipeBidsByToken(tokenAddress string) ([]*SnipeBid, error) {
+// GetSnipesByToken gets all snipes for a token
+func (db *DB) GetSnipesByToken(tokenAddress string) ([]*Snipe, error) {
 	query := `
-		SELECT id, user_id, token_address, bribe_amount, wallet, created_at, status
-		FROM snipe_bids
+		SELECT id, user_id, token_address, amount, bribe_amount, wallet, created_at, status
+		FROM snipes
 		WHERE token_address = ? AND status = 'pending'
 		ORDER BY CAST(bribe_amount AS DECIMAL(20,8)) DESC
 	`
@@ -141,63 +144,35 @@ func (db *DB) GetSnipeBidsByToken(tokenAddress string) ([]*SnipeBid, error) {
 	}
 	defer rows.Close()
 
-	var bids []*SnipeBid
+	var snipes []*Snipe
 	for rows.Next() {
-		bid := &SnipeBid{}
+		snipe := &Snipe{}
 		if err := rows.Scan(
-			&bid.ID,
-			&bid.UserID,
-			&bid.TokenAddress,
-			&bid.BribeAmount,
-			&bid.Wallet,
-			&bid.CreatedAt,
-			&bid.Status,
+			&snipe.ID,
+			&snipe.UserID,
+			&snipe.TokenAddress,
+			&snipe.Amount,
+			&snipe.BribeAmount,
+			&snipe.Wallet,
+			&snipe.CreatedAt,
+			&snipe.Status,
 		); err != nil {
 			return nil, err
 		}
-		bids = append(bids, bid)
+		snipes = append(snipes, snipe)
 	}
 
-	return bids, nil
+	return snipes, nil
 }
 
-// UpdateSnipeBidStatus updates the status of a snipe bid
-func (db *DB) UpdateSnipeBidStatus(id int64, status string) error {
+// UpdateSnipeStatus updates the status of a snipe
+func (db *DB) UpdateSnipeStatus(id int64, status string) error {
 	query := `
-		UPDATE snipe_bids
+		UPDATE snipes
 		SET status = ?
 		WHERE id = ?
 	`
 
 	_, err := db.Exec(query, status, id)
-	return err
-}
-
-// InitSchema initializes the database schema
-func (db *DB) InitSchema() error {
-	schema := `
-		CREATE TABLE IF NOT EXISTS wallets (
-			id BIGINT AUTO_INCREMENT PRIMARY KEY,
-			telegram_user_id VARCHAR(255) NOT NULL UNIQUE,
-			wallet_address VARCHAR(255) NOT NULL,
-			private_key TEXT NOT NULL,
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			INDEX idx_wallets_telegram_user_id (telegram_user_id)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
-		CREATE TABLE IF NOT EXISTS snipe_bids (
-			id BIGINT AUTO_INCREMENT PRIMARY KEY,
-			user_id VARCHAR(255) NOT NULL,
-			token_address VARCHAR(255) NOT NULL,
-			bribe_amount VARCHAR(255) NOT NULL,
-			wallet VARCHAR(255) NOT NULL,
-			created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			status VARCHAR(50) NOT NULL,
-			INDEX idx_snipe_bids_token_address (token_address),
-			INDEX idx_snipe_bids_status (status)
-		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-	`
-
-	_, err := db.Exec(schema)
 	return err
 }

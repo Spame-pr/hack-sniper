@@ -31,11 +31,6 @@ func main() {
 	}
 	defer database.Close()
 
-	// Initialize database schema
-	if err := database.InitSchema(); err != nil {
-		log.Fatalf("Failed to initialize database schema: %v", err)
-	}
-
 	// Initialize RPC service
 	rpcService, err := rpc.NewService(cfg, database)
 	if err != nil {
