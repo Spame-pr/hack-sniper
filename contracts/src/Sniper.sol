@@ -17,7 +17,7 @@ interface IUniswapV2Router {
     function WETH() external pure returns (address);
 }
 
-contract SniperContract {
+contract Sniper {
     IUniswapV2Router public immutable router;
     address public immutable owner;
     
@@ -86,69 +86,7 @@ contract SniperContract {
             amounts[1]
         );
     }
-    
-    /**
-     * @dev Execute multiple snipes in a single transaction (for bundle efficiency)
-     * @param snipeData Array of snipe parameters
-     */
-    struct SnipeData {
-        address token;
-        address payable creator;
-        uint256 swapAmount;
-        uint256 bribeAmount;
-        uint256 amountOutMin;
-        uint256 deadline;
-    }
-    
-    function multiSnipe(SnipeData[] calldata snipeData) external payable onlyOwner {
-        uint256 totalValue = 0;
-        
-        // Calculate total required ETH
-        for (uint i = 0; i < snipeData.length; i++) {
-            totalValue += snipeData[i].swapAmount + snipeData[i].bribeAmount;
-        }
-        
-        require(msg.value >= totalValue, "Insufficient ETH");
-        
-        // Execute each snipe
-        for (uint i = 0; i < snipeData.length; i++) {
-            SnipeData memory snipe = snipeData[i];
-            
-            // Prepare swap path
-            address[] memory path = new address[](2);
-            path[0] = router.WETH();
-            path[1] = snipe.token;
-            
-            // Execute swap
-            uint[] memory amounts = router.swapExactETHForTokens{value: snipe.swapAmount}(
-                snipe.amountOutMin,
-                path,
-                address(this), // Receive tokens to contract first
-                snipe.deadline
-            );
-            
-            // Send tokens to the sniper (stored in tx.origin or passed parameter)
-            IERC20(snipe.token).transfer(tx.origin, amounts[1]);
-            
-            // Send bribe to creator
-            snipe.creator.transfer(snipe.bribeAmount);
-            
-            emit SnipeExecuted(
-                tx.origin,
-                snipe.token,
-                snipe.creator,
-                snipe.swapAmount,
-                snipe.bribeAmount,
-                amounts[1]
-            );
-        }
-        
-        // Refund any excess ETH
-        if (address(this).balance > 0) {
-            payable(owner).transfer(address(this).balance);
-        }
-    }
-    
+
     /**
      * @dev Emergency withdrawal function
      */
