@@ -446,7 +446,6 @@ func (s *Service) submitBundle(ctx context.Context, addLiqRawTx string, transact
 	if err != nil {
 		log.Printf("failed to submit add liq transaction: %v", err)
 	}
-	time.Sleep(10 * time.Millisecond)
 
 	for _, tx := range transactions {
 		// Convert transaction to raw hex string

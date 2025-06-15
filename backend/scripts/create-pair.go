@@ -25,13 +25,15 @@ import (
 
 // TxParams holds common transaction parameters
 type TxParams struct {
-	PrivateKey  *ecdsa.PrivateKey
-	FromAddress common.Address
-	NetworkID   *big.Int
-	GasPrice    *big.Int
-	Client      *ethclient.Client
-	ProxyClient *ethclient.Client
-	Nonce       *uint64
+	PrivateKey     *ecdsa.PrivateKey
+	FromAddress    common.Address
+	NetworkID      *big.Int
+	GasPrice       *big.Int
+	MaxFeePerGas   *big.Int
+	MaxPriorityFee *big.Int
+	Client         *ethclient.Client
+	ProxyClient    *ethclient.Client
+	Nonce          *uint64
 }
 
 // Factory ABI for creating pairs
@@ -235,11 +237,20 @@ func addLiquidity(params *TxParams, routerAddress, tokenAddress common.Address, 
 		return fmt.Errorf("failed to pack liquidity data: %v", err)
 	}
 
-	// Create liquidity transaction
-	liquidityTx := types.NewTransaction(*params.Nonce, routerAddress, ethAmount, 300000, params.GasPrice, liquidityData)
+	// Create EIP-1559 liquidity transaction
+	liquidityTx := types.NewTx(&types.DynamicFeeTx{
+		ChainID:   params.NetworkID,
+		Nonce:     *params.Nonce,
+		GasTipCap: params.MaxPriorityFee,
+		GasFeeCap: params.MaxFeePerGas,
+		Gas:       450000,
+		To:        &routerAddress,
+		Value:     ethAmount,
+		Data:      liquidityData,
+	})
 
 	// Sign liquidity transaction
-	signedLiquidityTx, err := types.SignTx(liquidityTx, types.NewEIP155Signer(params.NetworkID), params.PrivateKey)
+	signedLiquidityTx, err := types.SignTx(liquidityTx, types.NewLondonSigner(params.NetworkID), params.PrivateKey)
 	if err != nil {
 		return fmt.Errorf("failed to sign liquidity transaction: %v", err)
 	}
@@ -338,6 +349,14 @@ func main() {
 		log.Fatalf("❌ Failed to get gas price: %v", err)
 	}
 
+	// Get EIP-1559 gas parameters
+	gasTipCap := big.NewInt(2100000)
+
+	// Calculate max fee per gas (base fee + tip with buffer)
+	maxFeePerGas := new(big.Int).Add(gasPrice, gasTipCap)
+	maxFeePerGas = new(big.Int).Mul(maxFeePerGas, big.NewInt(12))
+	maxFeePerGas = new(big.Int).Div(maxFeePerGas, big.NewInt(10))
+
 	// Token addresses - you can replace these with actual tokens
 	// WETH on Base Sepolia
 	wethAddress := common.HexToAddress("0x4200000000000000000000000000000000000006") // WETH on Base
@@ -357,13 +376,15 @@ func main() {
 
 	// Create transaction parameters
 	params := &TxParams{
-		PrivateKey:  privateKey,
-		FromAddress: fromAddress,
-		NetworkID:   networkID,
-		GasPrice:    gasPrice,
-		Client:      client,
-		ProxyClient: proxyClient,
-		Nonce:       &nonce,
+		PrivateKey:     privateKey,
+		FromAddress:    fromAddress,
+		NetworkID:      networkID,
+		GasPrice:       gasPrice,
+		MaxFeePerGas:   maxFeePerGas,
+		MaxPriorityFee: gasTipCap,
+		Client:         client,
+		ProxyClient:    proxyClient,
+		Nonce:          &nonce,
 	}
 
 	//// Step 1: Create pair (if needed)

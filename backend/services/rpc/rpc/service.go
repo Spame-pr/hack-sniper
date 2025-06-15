@@ -245,8 +245,8 @@ func (s *Service) extractSenderFromTransaction(tx *types.Transaction) (common.Ad
 		// For legacy transactions, use EIP155 signer
 		signer = types.NewEIP155Signer(chainID)
 	} else {
-		// For EIP-1559 and other transaction types, use LatestSigner
-		signer = types.LatestSigner(nil)
+		// For EIP-1559 and other transaction types, use London signer
+		signer = types.NewLondonSigner(chainID)
 	}
 
 	// Extract the sender using the signer
