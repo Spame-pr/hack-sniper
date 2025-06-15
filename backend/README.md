@@ -1,73 +1,71 @@
-# Sniper Bot System
+# Sniper Bot Backend System
 
-A system that allows token creators to auction off the right to snipe their tokens, where snipers compete with ETH bribes to get included early in the transaction bundle.
+A sophisticated MEV solution that allows token creators to monetize token sniping through a competitive bidding system. Built with Go, it features a Telegram bot interface for snipers and a custom RPC proxy for seamless integration with token deployment workflows.
 
-## 🎯 The Problem
+## 🎯 Overview
 
-Token creators get sniped — and usually walk away with nothing, while sniper bots farm all the upside.
+Instead of losing value to front-running bots, token creators can now:
+- **Monetize sniping activity** through direct bribes from competing snipers
+- **Maximize auction profits** as more snipers = more competition = higher bribes
+- **Maintain fair competition** through transparent bundle ordering mechanisms
 
-## 💡 The Solution
+## 🏗️ System Architecture
 
-Let's fix that. This system lets token creators auction off the right to snipe their tokens:
+### Core Components
 
-- Snipers compete with ETH bribes to get included early
-- Bribes go directly to the token creator
-- More bots ⇒ more bribes ⇒ more profit for the creator
-- Maximize chaos. Monetize attention.
+1. **🤖 Telegram Bot Service**
+   - User registration and secure wallet generation
+   - Balance monitoring and management
+   - Snipe bid submission and validation
+   - Real-time status updates and notifications
 
-## 🏗️ Architecture
+2. **🔗 RPC Proxy Service**
+   - Transparent transaction forwarding to Base sequencer
+   - LP_ADD transaction detection and interception
+   - Bundle construction coordination
+   - MEV-aware transaction processing
 
-### Components
+3. **💰 Bundle Manager**
+   - Snipe bid sorting by bribe amount (highest first)
+   - Gas price orchestration for proper transaction ordering
+   - Bundle construction and submission to Base
+   - Transaction success monitoring
 
-1. **🔫 Telegram Bot (for Snipers)**
-   - `/register`: Create a wallet (PK stored backend-side)
-   - View wallet balances (ETH + tokens)
-   - `/snipe <token_address> <bribe_in_ETH>`: Submit snipe requests
+4. **🔐 Wallet Manager**
+   - Cryptographically secure wallet generation
+   - Encrypted private key storage in MySQL
+   - Transaction signing and broadcast capabilities
+   - User wallet isolation and access control
 
-2. **🤑 Custom RPC (for Token Creators)**
-   - Non-LP_ADD txs → pass through to Base sequencer normally
-   - If LP_Add detected → trigger bundle build with sniper bribes
-
-### How It Works
-
-1. **Sniper Registration**: Users create wallets through the Telegram bot
-2. **Snipe Bidding**: Snipers submit bids for tokens that aren't live yet
-3. **LP_ADD Detection**: When a token creator adds liquidity, the system detects it
-4. **Bundle Creation**: System constructs a bundle with:
-   - TX 0: LP_ADD from token creator
-   - TX 1...N: Sniper swaps (sorted by bribe size)
-   - Each sniper transaction includes a bribe transfer to the token creator
-5. **Bundle Submission**: Submit to Base sequencer with proper gas price ordering
+5. **🗄️ Database Layer**
+   - MySQL 8.0 with InnoDB engine for ACID compliance
+   - Optimized indexing for high-performance queries
+   - UTF8MB4 support for full Unicode compatibility
+   - Connection pooling and transaction management
 
 ## 🚀 Quick Start
 
 ### Prerequisites
 
-- Go 1.21 or later
-- MySQL database
-- Telegram Bot Token
-- Base network RPC access
+- **Go**: Version 1.21 or later
+- **MySQL**: Version 8.0 or later
+- **Telegram Bot Token**: From @BotFather
+- **Base Network Access**: RPC endpoint URL
 
-### Setup
+### Installation
 
 1. **Clone and setup**:
 ```bash
 git clone <repository-url>
-cd sniper-bot
+cd sniper-bot/backend
 ./scripts/setup.sh
 ```
 
 2. **Configure environment**:
 ```bash
-# Edit .env file with your configuration
-vim .env
+cp .env.example .env
+# Edit .env with your configuration
 ```
-
-Required environment variables:
-- `TELEGRAM_BOT_TOKEN`: Your Telegram bot token
-- `BASE_RPC_URL`: Base network RPC URL
-- `ADMIN_PRIVATE_KEY`: Admin wallet private key
-- `DATABASE_URL`: MySQL connection string
 
 3. **Start MySQL**:
 ```bash
@@ -80,245 +78,348 @@ docker run --name sniper-mysql \
   --default-authentication-plugin=mysql_native_password
 ```
 
-4. **Run the services**:
+4. **Initialize database**:
 ```bash
-# Terminal 1 - Bot service
-make run-bot
+make db-migrate
+```
 
-# Terminal 2 - RPC service
-make run-rpc
+5. **Run services**:
+```bash
+# Development mode
+make dev
+
+# Or run services separately
+make run-bot    # Terminal 1
+make run-rpc    # Terminal 2
 ```
 
 ### Docker Deployment
 
 ```bash
-# Using Docker Compose
+# Production deployment
 docker-compose up -d
+
+# View logs
+docker-compose logs -f
 ```
 
-## 📱 Usage
+## 🔧 Configuration
+
+### Required Environment Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `TELEGRAM_BOT_TOKEN` | Telegram bot authentication token | `1234567890:ABC...` |
+| `BASE_RPC_URL` | Base network RPC endpoint | `https://base.llamarpc.com` |
+| `BASE_WS_URL` | Base network WebSocket endpoint | `wss://base.llamarpc.com` |
+| `ADMIN_PRIVATE_KEY` | Admin wallet private key (0x prefixed) | `0xabc123...` |
+| `DATABASE_URL` | MySQL connection string | `user:pass@tcp(host:port)/db` |
+| `UNISWAP_V2_ROUTER` | DEX router contract address | `0x4752ba5DBc23f44D87826276BF6Fd6b1C372aD24` |
+| `UNISWAP_V2_FACTORY` | DEX factory contract address | `0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6` |
+
+### Optional Configuration
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RPC_PORT` | `8545` | RPC proxy service port |
+| `BOT_PORT` | `8080` | Bot service health check port |
+| `MAX_SNIPE_BIDS` | `100` | Maximum concurrent snipe bids per token |
+| `BUNDLE_TIMEOUT` | `30s` | Bundle construction timeout |
+| `DB_MAX_CONNECTIONS` | `25` | Maximum database connections |
+
+## 📱 Usage Guide
 
 ### For Snipers
 
-1. **Register**: Send `/register` to the Telegram bot
-2. **Check Balance**: Send `/balance` to see your wallet info
-3. **Submit Snipe**: Send `/snipe <token_address> <bribe_amount>`
-
-Example:
+1. **Register Wallet**:
 ```
 /register
+```
+*Creates a secure wallet and stores encrypted private key*
+
+2. **Check Balance**:
+```
+/balance
+```
+*Shows ETH balance and wallet address*
+
+3. **Submit Snipe Bid**:
+```
 /snipe 0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6 0.1
 ```
+*Bids 0.1 ETH to snipe the specified token*
+
+4. **View Active Bids**:
+```
+/mybids
+```
+*Shows all active snipe bids*
 
 ### For Token Creators
 
-1. **Configure Metamask/Rabby**: Set custom RPC to `http://localhost:8545`
-2. **Deploy Token**: Deploy your token contract normally
-3. **Add Liquidity**: Add liquidity through the DEX
-4. **Receive Bribes**: Bribes are automatically sent to your address
+1. **Configure Metamask**: Set custom RPC to `http://localhost:8545` (or your deployed endpoint)
+2. **Deploy Token**: Deploy your ERC-20 token contract normally
+3. **Add Liquidity**: Add liquidity through your preferred DEX interface
+4. **Receive Bribes**: Bribes are automatically sent to your wallet address
 
-## 🔧 Development
+## 🔍 Development
 
-### Build
+### Build Commands
 
 ```bash
+# Build all services
 make build
+
+# Build specific services
+make build-bot
+make build-rpc
+
+# Cross-platform builds
+make build-linux
+make build-darwin
 ```
 
-### Test
+### Testing
 
 ```bash
+# Run all tests
 make test
+
+# Run tests with coverage
+make test-coverage
+
+# Run specific test packages
+go test ./pkg/bot/...
+go test ./pkg/rpc/...
 ```
 
-### Format Code
+### Code Quality
 
 ```bash
+# Format code
 make fmt
+
+# Run linter
+make lint
+
+# Static analysis
+make vet
+
+# Security scan
+make security-scan
 ```
 
-### Clean
+### Database Management
 
 ```bash
-make clean
+# Test database connection
+make test-mysql
+
+# Run migrations
+make db-migrate
+
+# Seed test data
+make db-seed
+
+# Backup database
+make db-backup
 ```
 
 ## 📊 Technical Details
 
-### Transaction Bundle Structure
+### Bundle Construction Algorithm
 
+```go
+// Pseudo-code for bundle construction
+func ConstructBundle(lpAddTx Transaction, bids []SnipeBid) Bundle {
+    // Sort bids by bribe amount (descending)
+    sort.Slice(bids, func(i, j int) bool {
+        return bids[i].BribeAmount.Cmp(bids[j].BribeAmount) > 0
+    })
+    
+    bundle := []Transaction{lpAddTx}
+    
+    // Add sniper transactions with decreasing gas prices
+    baseGasPrice := lpAddTx.GasPrice
+    for i, bid := range bids {
+        sniperTx := ConstructSniperTx(bid)
+        sniperTx.GasPrice = baseGasPrice - big.NewInt(int64(i+1))
+        bundle = append(bundle, sniperTx)
+    }
+    
+    return bundle
+}
 ```
-Bundle = [LP_Add, Sniper1, Sniper2, ..., SniperN]
-```
-
-- **LP_ADD**: Original liquidity addition transaction
-- **Sniper Transactions**: Ordered by bribe amount (highest first)
-- **Gas Price Ordering**: Each tx has `gasPrice = previous - 1 wei`
-- **Bribe Transfers**: ETH sent directly to token creator
-
-### Security Features
-
-- **Secure Wallet Generation**: Cryptographically secure private key generation
-- **Encrypted Storage**: Private keys stored encrypted in database
-- **Input Validation**: All user inputs validated before processing
-- **Transaction Ordering**: Gas price manipulation ensures proper ordering
-- **Access Control**: User operations isolated by user ID
-
-### Network Support
-
-- **Base Network**: Primary deployment target
-- **Uniswap V2 Compatible**: Works with any Uniswap V2-style DEX
-- **EVM Compatible**: Can be extended to other EVM chains
-
-## 🛠️ Configuration
-
-### Environment Variables
-
-| Variable | Description | Required |
-|----------|-------------|----------|
-| `TELEGRAM_BOT_TOKEN` | Telegram bot token | Yes |
-| `BASE_RPC_URL` | Base network RPC URL | Yes |
-| `BASE_WS_URL` | Base network WebSocket URL | Yes |
-| `ADMIN_PRIVATE_KEY` | Admin wallet private key | Yes |
-| `DATABASE_URL` | MySQL connection string | Yes |
-| `UNISWAP_V2_ROUTER` | DEX router contract address | Yes |
-| `UNISWAP_V2_FACTORY` | DEX factory contract address | Yes |
 
 ### Database Schema
 
-The system automatically creates the required MySQL tables:
-
-#### `wallets` Table
-- `id`: Auto-increment primary key
-- `telegram_user_id`: Unique identifier for Telegram users
-- `wallet_address`: Ethereum wallet address
-- `private_key`: Encrypted private key storage
-- `created_at`: Timestamp of wallet creation
-
-#### `snipe_bids` Table
-- Stores sniper bid information with InnoDB engine
-- Indexes on `token_address` and `status` for performance
-- UTF8MB4 charset for full Unicode support
-
-**Important**: Each user can only have ONE wallet. The system enforces this constraint at the database level with a unique index on `telegram_user_id`.
-
-### MySQL Connection String Format
-
-```
-username:password@tcp(host:port)/database?charset=utf8mb4&parseTime=True&loc=Local
+#### Wallets Table
+```sql
+CREATE TABLE wallets (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    telegram_user_id VARCHAR(255) UNIQUE NOT NULL,
+    wallet_address VARCHAR(42) NOT NULL,
+    encrypted_private_key TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_wallets_telegram_user_id (telegram_user_id),
+    INDEX idx_wallets_address (wallet_address)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-Example:
-```
-sniper_user:sniper_password@tcp(localhost:3306)/sniper_bot?charset=utf8mb4&parseTime=True&loc=Local
+#### Snipe Bids Table
+```sql
+CREATE TABLE snipe_bids (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    user_id VARCHAR(255) NOT NULL,
+    token_address VARCHAR(42) NOT NULL,
+    bribe_amount DECIMAL(36,18) NOT NULL,
+    wallet_address VARCHAR(42) NOT NULL,
+    status ENUM('pending', 'executed', 'failed', 'expired') DEFAULT 'pending',
+    transaction_hash VARCHAR(66),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    executed_at TIMESTAMP NULL,
+    INDEX idx_snipe_bids_token_address (token_address),
+    INDEX idx_snipe_bids_status (status),
+    INDEX idx_snipe_bids_user_id (user_id),
+    INDEX idx_snipe_bids_created_at (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
-## 🔍 Monitoring
+### Security Features
+
+- **🔐 Encrypted Storage**: Private keys encrypted with AES-256-GCM
+- **🛡️ Input Validation**: Comprehensive validation for all user inputs
+- **🔒 Access Control**: User operations isolated by Telegram user ID
+- **⚡ Rate Limiting**: Protection against spam and abuse
+- **🔍 Audit Logging**: Complete transaction and operation logging
+- **🚫 SQL Injection Protection**: Parameterized queries throughout
+
+### Performance Optimizations
+
+- **Connection Pooling**: Efficient MySQL connection management
+- **Query Optimization**: Indexed queries for O(log n) performance
+- **Batch Processing**: Bulk operations for improved throughput
+- **Caching**: In-memory caching for frequently accessed data
+- **Async Processing**: Non-blocking I/O for concurrent operations
+
+## 🔧 Monitoring & Observability
 
 ### Health Checks
 
-- Bot service: `http://localhost:8080/health`
-- RPC service: `http://localhost:8545/health`
+```bash
+# Bot service health
+curl http://localhost:8080/health
 
-### Logs
+# RPC service health  
+curl http://localhost:8545/health
 
-Logs are written to stdout and can be redirected to files:
+# Database connectivity
+make test-mysql
+```
+
+### Logging
+
+Structured logging with multiple levels:
+```bash
+# View logs in development
+make logs
+
+# Production log aggregation
+docker-compose logs -f bot
+docker-compose logs -f rpc
+```
+
+### Metrics
+
+Key metrics to monitor:
+- **Snipe Success Rate**: Percentage of successful snipes
+- **Bundle Construction Time**: Time to build transaction bundles
+- **Database Query Performance**: Query execution times
+- **Transaction Processing**: Throughput and latency metrics
+
+## 🚨 Troubleshooting
+
+### Common Issues
+
+1. **Database Connection Errors**:
+```bash
+# Check MySQL status
+docker ps | grep mysql
+
+# Test connection
+make test-mysql
+
+# Reset database
+make db-reset
+```
+
+2. **Telegram Bot Not Responding**:
+```bash
+# Check bot token validity
+curl https://api.telegram.org/bot<TOKEN>/getMe
+
+# Restart bot service
+make restart-bot
+```
+
+3. **RPC Proxy Issues**:
+```bash
+# Check Base network connectivity
+curl -X POST -H "Content-Type: application/json" \
+  --data '{"jsonrpc":"2.0","method":"net_version","params":[],"id":1}' \
+  $BASE_RPC_URL
+```
+
+### Debug Mode
 
 ```bash
-./bin/bot > logs/bot.log 2>&1 &
-./bin/rpc > logs/rpc.log 2>&1 &
+# Enable debug logging
+export LOG_LEVEL=debug
+make run-bot
+
+# Enable SQL query logging
+export DB_LOG_MODE=true
+make run-rpc
 ```
 
 ## 🤝 Contributing
 
 1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Add tests for new functionality
-5. Run tests: `make test`
-6. Submit a pull request
+2. Create a feature branch: `git checkout -b feature/amazing-feature`
+3. Make your changes and add tests
+4. Run the test suite: `make test`
+5. Format code: `make fmt`
+6. Run linter: `make lint`
+7. Commit changes: `git commit -m 'Add amazing feature'`
+8. Push to branch: `git push origin feature/amazing-feature`
+9. Open a Pull Request
+
+### Development Guidelines
+
+- Write comprehensive tests for new functionality
+- Follow Go best practices and idioms
+- Update documentation for API changes
+- Use semantic commit messages
+- Ensure backward compatibility
 
 ## 📄 License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
 ## ⚠️ Disclaimer
 
-This software is for educational and research purposes. Users are responsible for compliance with applicable laws and regulations. The authors are not responsible for any financial losses or legal issues arising from the use of this software.
+This software is provided for educational and research purposes only. Users are solely responsible for compliance with applicable laws and regulations. The authors disclaim all liability for any financial losses, legal issues, or other damages arising from the use of this software.
 
 ## 🆘 Support
 
 For support and questions:
 
-1. Check the [Architecture Documentation](ARCHITECTURE.md)
-2. Review the [Issues](https://github.com/your-repo/issues) page
-3. Join our community discussions
-
-## 🚧 Roadmap
-
-- [ ] Multi-chain support (Ethereum, Arbitrum, Polygon)
-- [ ] Advanced bidding mechanisms (time-based auctions)
-- [ ] Web dashboard for analytics
-- [ ] REST API for programmatic access
-- [ ] Enhanced MEV protection mechanisms
-- [ ] Mobile app for snipers
-
-## 🔫 Bot Service HTTP API
-
-The bot service now includes an HTTP server with the following endpoints:
-
-#### Endpoints
-
-1. **Health Check**
-   ```
-   GET /health
-   Response: "OK" (200)
-   ```
-
-2. **LP_ADD Notification**
-   ```
-   POST /api/lp-add
-   Authorization: Bearer <BOT_API_KEY>
-   Content-Type: application/json
-   
-   Payload:
-   {
-     "tokenAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-     "creatorAddress": "0x8e3cf8fe85a40c70a56f128f8e444c7ea864480d",
-     "txCallData": "0xf305d719000000000000000000000000742d35cc..."
-   }
-   
-   Response:
-   {
-     "status": "success",
-     "message": "LP_ADD notification received and processed",
-     "data": {
-       "tokenAddress": "0x742d35Cc6634C0532925a3b8D4C9db96C4b4d8b6",
-       "creatorAddress": "0x8e3cf8fe85a40c70a56f128f8e444c7ea864480d"
-     }
-   }
-   ```
-
-#### Configuration
-
-Add these environment variables:
-
-```bash
-# Bot HTTP server configuration
-BOT_HTTP_PORT=8080                    # Port for HTTP server (default: 8080)
-BOT_API_KEY=your-secure-api-key-here  # API key for authentication
-
-# RPC service configuration  
-BOT_API_URL=http://localhost:8080     # Bot service URL (default: http://localhost:8080)
-```
-
-#### Testing
-
-```bash
-# Test the API
-go run scripts/test-bot-api.go
-```
+- **Issues**: Open an issue on GitHub
+- **Documentation**: Check the `/docs` directory
+- **Community**: Join our Discord community
+- **Security**: Report security issues privately to security@example.com
 
 ---
 
-**Built with ❤️ for the DeFi community** 
+*Built with ❤️ for the DeFi community* 
