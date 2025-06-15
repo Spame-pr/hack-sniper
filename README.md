@@ -43,7 +43,7 @@ graph TB
     TC --> MM
     MM --> RPC
     
-    RPC -.->|Bundle Creation| BS
+    BS -.->|Bundle Creation| RPC
     SC -.->|Bribe Transfer| TC
 ```
 
