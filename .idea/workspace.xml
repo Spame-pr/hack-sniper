@@ -6,9 +6,7 @@
   <component name="ChangeListManager">
     <list default="true" id="fb3928ca-9124-4edd-a14d-9b2a78839709" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/scripts/create-pair.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/scripts/create-pair.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/services/bot/api/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/api/service.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/services/rpc/rpc/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/rpc/rpc/service.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" afterDir="false" />
