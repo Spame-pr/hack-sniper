@@ -38,12 +38,12 @@ graph TB
     
     TG --> BS
     BS --> DB
-    RPC --> SC
+    BS --> SC
     SC --> DEX
     TC --> MM
     MM --> RPC
     
-    BS -.->|Bundle Creation| RPC
+    RPC -.->|Bundle Creation| BS
     SC -.->|Bribe Transfer| TC
 ```
 
