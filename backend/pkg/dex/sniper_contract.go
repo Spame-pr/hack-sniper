@@ -68,27 +68,6 @@ const SniperContractABI = `[
 		"type": "function"
 	},
 	{
-		"inputs": [
-			{
-				"components": [
-					{"internalType": "address", "name": "token", "type": "address"},
-					{"internalType": "address payable", "name": "creator", "type": "address"},
-					{"internalType": "uint256", "name": "swapAmount", "type": "uint256"},
-					{"internalType": "uint256", "name": "bribeAmount", "type": "uint256"},
-					{"internalType": "uint256", "name": "amountOutMin", "type": "uint256"},
-					{"internalType": "uint256", "name": "deadline", "type": "uint256"}
-				],
-				"internalType": "struct SniperContract.SnipeData[]",
-				"name": "snipeData",
-				"type": "tuple[]"
-			}
-		],
-		"name": "multiSnipe",
-		"outputs": [],
-		"stateMutability": "payable",
-		"type": "function"
-	},
-	{
 		"inputs": [],
 		"name": "emergencyWithdraw",
 		"outputs": [],
@@ -170,68 +149,6 @@ func (s *SniperContract) SnipeWithBribe(
 		deadline,
 		bribeAmount,
 	)
-}
-
-// MultiSnipe executes multiple snipes in a single transaction
-func (s *SniperContract) MultiSnipe(
-	ctx context.Context,
-	privateKey *ecdsa.PrivateKey,
-	snipeData []SnipeData,
-) (*types.Transaction, error) {
-	// Create transaction options
-	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, s.chainID)
-	if err != nil {
-		return nil, err
-	}
-
-	// Calculate total value required
-	totalValue := big.NewInt(0)
-	for _, snipe := range snipeData {
-		totalValue.Add(totalValue, snipe.SwapAmount)
-		totalValue.Add(totalValue, snipe.BribeAmount)
-	}
-	auth.Value = totalValue
-
-	// Estimate gas (higher for multiple operations)
-	auth.GasLimit = uint64(200000 + len(snipeData)*100000)
-
-	// Get current gas price
-	gasPrice, err := s.client.SuggestGasPrice(ctx)
-	if err != nil {
-		return nil, err
-	}
-	auth.GasPrice = gasPrice
-
-	// Convert to contract format
-	contractSnipeData := make([]struct {
-		Token        common.Address
-		Creator      common.Address
-		SwapAmount   *big.Int
-		BribeAmount  *big.Int
-		AmountOutMin *big.Int
-		Deadline     *big.Int
-	}, len(snipeData))
-
-	for i, snipe := range snipeData {
-		contractSnipeData[i] = struct {
-			Token        common.Address
-			Creator      common.Address
-			SwapAmount   *big.Int
-			BribeAmount  *big.Int
-			AmountOutMin *big.Int
-			Deadline     *big.Int
-		}{
-			Token:        snipe.Token,
-			Creator:      snipe.Creator,
-			SwapAmount:   snipe.SwapAmount,
-			BribeAmount:  snipe.BribeAmount,
-			AmountOutMin: snipe.AmountOutMin,
-			Deadline:     snipe.Deadline,
-		}
-	}
-
-	// Execute the transaction
-	return s.contract.Transact(auth, "multiSnipe", contractSnipeData)
 }
 
 // CreateSnipeTransaction creates a snipe transaction without executing it

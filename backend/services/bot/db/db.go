@@ -82,7 +82,6 @@ func (db *DB) GetWalletByTelegramUserID(telegramUserID string) (*Wallet, error) 
 		FROM wallets
 		WHERE telegram_user_id = ?
 	`
-	fmt.Println("telegramUserID", telegramUserID)
 
 	wallet := &Wallet{}
 	err := db.QueryRow(query, telegramUserID).Scan(

@@ -21,6 +21,7 @@ type Config struct {
 	BaseRPCURL          string
 	BaseSequencerRPCURL string
 	BaseWSURL           string
+	BaseKolibrioRpcURL  string
 
 	// Database (MySQL)
 	DatabaseURL string
@@ -33,6 +34,9 @@ type Config struct {
 	UniswapV2Router  string
 	UniswapV2Factory string
 
+	// Sniper contract
+	SniperContract string
+
 	// Auth
 	AuthKey string
 }
@@ -41,25 +45,17 @@ type Config struct {
 func Load() *Config {
 	config := &Config{
 		TelegramBotToken:    os.Getenv("TELEGRAM_BOT_TOKEN"),
-		BaseRPCURL:          getEnvWithFallback("BASE_SEPOLIA_RPC_URL", "BASE_RPC_URL"),
-		BaseSequencerRPCURL: getEnvWithFallback("BASE_SEQUENCER_RPC_URL", "BASE_SEPOLIA_RPC_URL"),
+		BaseRPCURL:          os.Getenv("BASE_RPC_URL"),
+		BaseSequencerRPCURL: os.Getenv("BASE_SEQUENCER_URL"),
 		BaseWSURL:           os.Getenv("BASE_WS_URL"),
+		BaseKolibrioRpcURL:  os.Getenv("KOLIBRIO_BASE_RPC"),
 		DatabaseURL:         os.Getenv("DATABASE_URL"),
 		UniswapV2Router:     os.Getenv("UNISWAP_V2_ROUTER"),
 		UniswapV2Factory:    os.Getenv("UNISWAP_V2_FACTORY"),
 		AuthKey:             os.Getenv("AUTH_KEY"),
+		SniperContract:      "0xa71940cb90C8F3634DD3AB6a992D0EFF056Db48d",
 	}
 
-	// Set default values for Base Sepolia testnet
-	if config.BaseRPCURL == "" {
-		config.BaseRPCURL = "https://sepolia.base.org"
-	}
-	if config.BaseSequencerRPCURL == "" {
-		config.BaseSequencerRPCURL = "https://sepolia.base.org" // fallback to same as BaseRPCURL
-	}
-	if config.BaseWSURL == "" {
-		config.BaseWSURL = "wss://sepolia.base.org"
-	}
 	if config.DatabaseURL == "" {
 		config.DatabaseURL = "root:admin@tcp(localhost:3306)/sniper?charset=utf8mb4&parseTime=True&loc=Local"
 	}

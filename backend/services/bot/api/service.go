@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"math/big"
 	"net/http"
@@ -67,18 +68,15 @@ func NewService(walletManager *wallet.Manager, database *db.DB) (*Service, error
 	}
 
 	// Use BASE_SEQUENCER_URL for RPC connection
-	sequencerURL := cfg.BaseSequencerRPCURL
+	rpcUrl := cfg.BaseRPCURL
 
-	ethClient, err := eth.NewClient(sequencerURL)
+	ethClient, err := eth.NewClient(rpcUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create eth client: %v", err)
 	}
 
 	// Initialize bundle manager with sniper contract address
-	sniperContractAddr := common.HexToAddress(os.Getenv("SNIPER_CONTRACT_ADDRESS"))
-	if sniperContractAddr == (common.Address{}) {
-		log.Printf("⚠️ SNIPER_CONTRACT_ADDRESS not set, bundle functionality will be limited")
-	}
+	sniperContractAddr := common.HexToAddress(cfg.SniperContract)
 
 	bundleManager, err := bundle.NewManager(ethClient.Client, sniperContractAddr)
 	if err != nil {
@@ -97,15 +95,13 @@ func NewService(walletManager *wallet.Manager, database *db.DB) (*Service, error
 
 // Start starts the API service
 func (s *Service) Start() error {
-	return s.startHTTPServer()
-}
-
-// startHTTPServer starts the HTTP server for receiving LP_ADD notifications
-func (s *Service) startHTTPServer() error {
 	mux := http.NewServeMux()
 
 	// Add the LP_ADD notification endpoint
 	mux.HandleFunc("/api/lp-add", s.handleLPAddNotification)
+
+	// Add the LP_ADD notification endpoint
+	mux.HandleFunc("/api/test", s.processTest)
 
 	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -237,10 +233,7 @@ func (s *Service) processLPAddAndCreateBundle(notification LPAddNotification) {
 	log.Printf("📦 Created bundle with %d transactions (1 LP_ADD + %d snipes)", len(bundleTxs), len(bundleBids))
 
 	// Submit bundle to Base sequencer
-	if err := s.submitBundleToSequencer(ctx, bundleTxs); err != nil {
-		log.Printf("❌ Failed to submit bundle to sequencer: %v", err)
-		return
-	}
+	s.submitBundle(ctx, bundleTxs)
 
 	// Update snipe statuses to 'submitted'
 	for _, snipe := range snipes {
@@ -408,83 +401,119 @@ func (s *Service) createBundleTransactions(ctx context.Context, lpAddTx *types.T
 			return nil, fmt.Errorf("failed to create snipe transaction for %s: %v", bid.Wallet.Hex(), err)
 		}
 
-		transactions = append(transactions, snipeTx)
+		// Sign the transaction with the user's private key
+		privateKeyHex := bid.PrivateKey
+		if privateKeyHex == "" {
+			return nil, fmt.Errorf("private key not found for wallet %s", bid.Wallet.Hex())
+		}
+
+		// Remove 0x prefix if present
+		if strings.HasPrefix(privateKeyHex, "0x") {
+			privateKeyHex = privateKeyHex[2:]
+		}
+
+		privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode private key for %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		privateKey, err := crypto.ToECDSA(privateKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key for %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		// Get chain ID for signing
+		chainID, err := s.ethClient.Client.ChainID(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get chain ID: %v", err)
+		}
+
+		// Sign the transaction
+		signedTx, err := types.SignTx(snipeTx, types.NewEIP155Signer(chainID), privateKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign transaction for %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		log.Printf("✅ Transaction signed for wallet %s", bid.Wallet.Hex()[:10]+"...")
+		transactions = append(transactions, signedTx)
 	}
 
 	return transactions, nil
 }
 
-// submitBundleToSequencer submits the bundle to Base sequencer
-func (s *Service) submitBundleToSequencer(ctx context.Context, transactions []*types.Transaction) error {
-	// Convert transactions to raw hex strings
-	var rawTxs []string
+func (s *Service) submitBundle(ctx context.Context, transactions []*types.Transaction) {
 	for _, tx := range transactions {
-		rawTx, err := tx.MarshalBinary()
+		err := s.submitTx(ctx, tx)
 		if err != nil {
-			return fmt.Errorf("failed to marshal transaction: %v", err)
+			log.Printf("failed to submit transaction: %v; hash: %s", err, tx.Hash().Hex())
 		}
-		rawTxs = append(rawTxs, "0x"+hex.EncodeToString(rawTx))
 	}
+}
 
-	// Get current block number
-	blockNumber, err := s.ethClient.Client.BlockNumber(ctx)
+func (s *Service) submitTx(ctx context.Context, transaction *types.Transaction) error {
+	// Convert transaction to raw hex string
+	rawTx, err := transaction.MarshalBinary()
 	if err != nil {
-		return fmt.Errorf("failed to get block number: %v", err)
+		return fmt.Errorf("failed to marshal transaction: %v", err)
+	}
+	rawTxHex := "0x" + hex.EncodeToString(rawTx)
+
+	// Create eth_sendRawTransaction request
+	type RawTxRequest struct {
+		JSONRPC string   `json:"jsonrpc"`
+		Method  string   `json:"method"`
+		Params  []string `json:"params"`
+		ID      int      `json:"id"`
 	}
 
-	// Target next block
-	targetBlock := fmt.Sprintf("0x%x", blockNumber+1)
-
-	// Create bundle submission request
-	bundleReq := BundleSubmissionRequest{
+	txReq := RawTxRequest{
 		JSONRPC: "2.0",
-		Method:  "eth_sendBundle",
-		Params: []struct {
-			Txs             []string `json:"txs"`
-			TrustedBuilders []string `json:"trustedBuilders"`
-			BlockNumber     string   `json:"blockNumber"`
-		}{
-			{
-				Txs: rawTxs,
-				TrustedBuilders: []string{
-					"titan",
-					"beaver",
-					"rsync",
-				},
-				BlockNumber: targetBlock,
-			},
-		},
-		ID: 1,
+		Method:  "eth_sendRawTransaction",
+		Params:  []string{rawTxHex},
+		ID:      1,
 	}
 
 	// Marshal request
-	reqBody, err := json.Marshal(bundleReq)
+	reqBody, err := json.Marshal(txReq)
 	if err != nil {
-		return fmt.Errorf("failed to marshal bundle request: %v", err)
+		return fmt.Errorf("failed to marshal transaction request: %v", err)
 	}
 
-	// Get sequencer URL with API key
-	sequencerURL := s.config.BaseSequencerRPCURL
-	apiKey := os.Getenv("BASE_SEQUENCER_API_KEY")
-	if apiKey != "" {
-		sequencerURL += "?api_key=" + apiKey
-	}
+	resp, err := http.Post(s.config.BaseSequencerRPCURL, "application/json", bytes.NewBuffer(reqBody))
 
-	// Submit to sequencer
-	resp, err := http.Post(sequencerURL, "application/json", bytes.NewBuffer(reqBody))
 	if err != nil {
-		return fmt.Errorf("failed to submit bundle: %v", err)
+		return fmt.Errorf("failed to submit transaction: %v", err)
 	}
 	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("bundle submission failed with status %d", resp.StatusCode)
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %v", err)
 	}
 
-	log.Printf("📦 Bundle submitted to Base sequencer successfully")
-	log.Printf("   📊 Transactions: %d", len(rawTxs))
-	log.Printf("   🎯 Target Block: %s", targetBlock)
-	log.Printf("   🔗 Sequencer: %s", sequencerURL)
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("transaction submission failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response to get transaction hash
+	type RawTxResponse struct {
+		JSONRPC string      `json:"jsonrpc"`
+		Result  string      `json:"result"`
+		Error   interface{} `json:"error"`
+		ID      int         `json:"id"`
+	}
+
+	var txResp RawTxResponse
+	if err := json.Unmarshal(respBody, &txResp); err != nil {
+		return fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	if txResp.Error != nil {
+		return fmt.Errorf("transaction failed: %v", txResp.Error)
+	}
+
+	log.Printf("Transaction submitted successfully; Hash: %s", txResp.Result)
 
 	return nil
 }
@@ -499,4 +528,218 @@ func (s *Service) Stop() error {
 	}
 
 	return nil
+}
+
+func (s *Service) processTest(w http.ResponseWriter, r *http.Request) {
+	notification := LPAddNotification{
+		TokenAddress:   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+		CreatorAddress: "0x0049075f71D6735b4217bcA04e98634baf0acD10",
+		TxCallData:     "0x",
+	}
+	ctx := context.Background()
+
+	log.Printf("🔄 Processing LP_ADD for token %s", notification.TokenAddress)
+
+	// Get pending snipes for this token
+	snipes, err := s.db.GetSnipesByToken(notification.TokenAddress)
+	if err != nil {
+		log.Printf("❌ Failed to get snipes for token %s: %v", notification.TokenAddress, err)
+		return
+	}
+
+	if len(snipes) == 0 {
+		log.Printf("ℹ️ No pending snipes found for token %s", notification.TokenAddress)
+		return
+	}
+
+	log.Printf("📊 Found %d pending snipes for token %s", len(snipes), notification.TokenAddress)
+
+	// Convert database snipes to bundle format
+	bundleBids, err := s.convertSnipesToBundleBids(snipes)
+	if err != nil {
+		log.Printf("❌ Failed to convert snipes to bundle bids: %v", err)
+		return
+	}
+
+	// Sort bids by bribe amount (descending) - highest bribes first
+	sort.Slice(bundleBids, func(i, j int) bool {
+		return bundleBids[i].BribeAmount.Cmp(bundleBids[j].BribeAmount) > 0
+	})
+
+	log.Printf("💰 Sorted %d snipes by bribe amount (highest first)", len(bundleBids))
+	for i, bid := range bundleBids {
+		bribeETH := new(big.Float).Quo(new(big.Float).SetInt(bid.BribeAmount), big.NewFloat(1e18))
+		log.Printf("   %d. Wallet %s: %s ETH bribe", i+1, bid.Wallet.Hex()[:10]+"...", bribeETH.Text('f', 4))
+	}
+
+	// Create bundle transactions
+	bundleTxs, err := s.createBundleTransactionsTest(ctx, bundleBids, notification)
+	if err != nil {
+		log.Printf("❌ Failed to create bundle transactions: %v", err)
+		return
+	}
+
+	log.Printf("📦 Created bundle with %d transactions (1 LP_ADD + %d snipes)", len(bundleTxs), len(bundleBids))
+
+	// Submit bundle to Base sequencer
+	s.submitBundle(ctx, bundleTxs)
+
+	// Update snipe statuses to 'submitted'
+	for _, snipe := range snipes {
+		if err := s.db.UpdateSnipeStatus(snipe.ID, "submitted"); err != nil {
+			log.Printf("⚠️ Failed to update snipe status for ID %d: %v", snipe.ID, err)
+		}
+	}
+
+	log.Printf("✅ Bundle submitted successfully for token %s with %d snipes", notification.TokenAddress, len(snipes))
+}
+func (s *Service) createBundleTransactionsTest(ctx context.Context, bids []*bundle.SnipeBid, notification LPAddNotification) ([]*types.Transaction, error) {
+	var transactions []*types.Transaction
+
+	// Get base fee for EIP-1559 transactions
+	latestBlock, err := s.ethClient.Client.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get latest block: %v", err)
+	}
+
+	baseFee := latestBlock.BaseFee
+	if baseFee == nil {
+		// Fallback to legacy gas price if base fee not available
+		legacyGasPrice, err := s.ethClient.Client.SuggestGasPrice(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get gas price: %v", err)
+		}
+		baseFee = legacyGasPrice
+	}
+
+	// Set initial max priority fee per gas (tip to miners/validators)
+	maxPriorityFeePerGas := big.NewInt(2000000) // 2 gwei tip
+
+	// Calculate initial max fee per gas = base fee + priority fee + buffer
+	buffer := big.NewInt(1000000) // 1 gwei buffer
+	initialMaxFeePerGas := new(big.Int).Add(baseFee, maxPriorityFeePerGas)
+	initialMaxFeePerGas.Add(initialMaxFeePerGas, buffer)
+
+	// Cap max fee at reasonable level for Base network (20 gwei)
+	maxGasPriceGwei := big.NewInt(20)
+	maxGasPrice := new(big.Int).Mul(maxGasPriceGwei, big.NewInt(1e9))
+	if initialMaxFeePerGas.Cmp(maxGasPrice) > 0 {
+		initialMaxFeePerGas = maxGasPrice
+	}
+
+	// Debug gas price information
+	baseFeeGwei := new(big.Float).Quo(new(big.Float).SetInt(baseFee), big.NewFloat(1e9))
+	maxFeeGwei := new(big.Float).Quo(new(big.Float).SetInt(initialMaxFeePerGas), big.NewFloat(1e9))
+	priorityFeeGwei := new(big.Float).Quo(new(big.Float).SetInt(maxPriorityFeePerGas), big.NewFloat(1e9))
+
+	fmt.Printf("💰 EIP-1559 Gas Price Debug:\n")
+	fmt.Printf("   Base Fee: %s wei (%s gwei)\n", baseFee.String(), baseFeeGwei.Text('f', 2))
+	fmt.Printf("   Initial Max Fee: %s wei (%s gwei)\n", initialMaxFeePerGas.String(), maxFeeGwei.Text('f', 2))
+	fmt.Printf("   Priority Fee: %s wei (%s gwei)\n", maxPriorityFeePerGas.String(), priorityFeeGwei.Text('f', 2))
+
+	// Create snipe transactions with decreasing max fee per gas (sorted by bribe size)
+	for i, bid := range bids {
+		// Calculate max fee per gas: each subsequent tx has maxFeePerGas = previous - 1 wei
+		// This ensures strict ordering based on bribe size for Base sequencer
+		maxFeePerGas := new(big.Int).Sub(initialMaxFeePerGas, big.NewInt(int64(i)))
+
+		// Ensure minimum fee (at least base fee + priority fee)
+		minMaxFee := new(big.Int).Add(baseFee, maxPriorityFeePerGas)
+		if maxFeePerGas.Cmp(minMaxFee) < 0 {
+			maxFeePerGas = minMaxFee
+		}
+
+		// Debug gas price for this transaction
+		maxFeeGwei := new(big.Float).Quo(new(big.Float).SetInt(maxFeePerGas), big.NewFloat(1e9))
+		bribeETH := new(big.Float).Quo(new(big.Float).SetInt(bid.BribeAmount), big.NewFloat(1e18))
+		fmt.Printf("   Tx %d (Bribe: %s ETH) Max Fee: %s gwei\n", i+1, bribeETH.Text('f', 4), maxFeeGwei.Text('f', 2))
+
+		// Get nonce for the sniper
+		nonce, err := s.ethClient.Client.PendingNonceAt(ctx, bid.Wallet)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get nonce for sniper %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		// Extract creator address from notification
+		creatorAddr := common.HexToAddress(notification.CreatorAddress)
+		deadline := big.NewInt(time.Now().Add(5 * time.Minute).Unix())
+		amountOutMin := big.NewInt(1) // Minimum 1 wei of tokens (unlimited slippage)
+
+		// Get sniper contract from bundle manager
+		sniperContract := s.bundleManager.GetSniperContract()
+
+		// Create snipe transaction call data
+		snipeTx, err := sniperContract.CreateSnipeTransaction(
+			ctx,
+			bid.Wallet,
+			bid.TokenAddress,
+			creatorAddr,
+			bid.SwapAmount,
+			bid.BribeAmount,
+			amountOutMin,
+			deadline,
+			maxFeePerGas, // Pass maxFeePerGas instead of legacy gasPrice
+			nonce,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create snipe transaction for %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		// Create EIP-1559 transaction (v2)
+		dynamicTx := &types.DynamicFeeTx{
+			ChainID:   big.NewInt(8453), // Base mainnet chain ID
+			Nonce:     nonce,
+			GasTipCap: maxPriorityFeePerGas,
+			GasFeeCap: maxFeePerGas,
+			Gas:       snipeTx.Gas(),
+			To:        snipeTx.To(),
+			Value:     snipeTx.Value(),
+			Data:      snipeTx.Data(),
+		}
+
+		// Convert to Transaction type
+		eip1559Tx := types.NewTx(dynamicTx)
+
+		// Sign the transaction with the user's private key
+		privateKeyHex := bid.PrivateKey
+		if privateKeyHex == "" {
+			return nil, fmt.Errorf("private key not found for wallet %s", bid.Wallet.Hex())
+		}
+
+		// Remove 0x prefix if present
+		if strings.HasPrefix(privateKeyHex, "0x") {
+			privateKeyHex = privateKeyHex[2:]
+		}
+
+		privateKeyBytes, err := hex.DecodeString(privateKeyHex)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode private key for %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		privateKey, err := crypto.ToECDSA(privateKeyBytes)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse private key for %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		// Get chain ID for signing
+		chainID, err := s.ethClient.Client.ChainID(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get chain ID: %v", err)
+		}
+
+		// Sign EIP-1559 transaction with London signer
+		signedTx, err := types.SignTx(eip1559Tx, types.NewLondonSigner(chainID), privateKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to sign EIP-1559 transaction for %s: %v", bid.Wallet.Hex(), err)
+		}
+
+		log.Printf("✅ EIP-1559 transaction signed for wallet %s (Bribe: %s ETH)",
+			bid.Wallet.Hex()[:10]+"...",
+			bribeETH.Text('f', 4))
+
+		transactions = append(transactions, signedTx)
+	}
+
+	log.Printf("📦 Created %d EIP-1559 transactions sorted by bribe size (highest to lowest)", len(transactions))
+	return transactions, nil
 }
