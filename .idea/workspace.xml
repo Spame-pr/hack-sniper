@@ -6,13 +6,16 @@
   <component name="ChangeListManager">
     <list default="true" id="fb3928ca-9124-4edd-a14d-9b2a78839709" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/.env.example" beforeDir="false" afterPath="$PROJECT_DIR$/backend/.env.example" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/pkg/config/config.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/config/config.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/pkg/dex/sniper_contract.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/pkg/dex/sniper_contract.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/scripts/create-pair.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/scripts/create-pair.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/backend/services/bot/api/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/api/service.go" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/backend/services/bot/db/db.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/bot/db/db.go" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/backend/services/rpc/rpc/service.go" beforeDir="false" afterPath="$PROJECT_DIR$/backend/services/rpc/rpc/service.go" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/CONTRIBUTING.md" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/lib/forge-std/README.md" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/contracts/script/Sniper.s.sol" beforeDir="false" afterPath="$PROJECT_DIR$/contracts/script/Sniper.s.sol" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />

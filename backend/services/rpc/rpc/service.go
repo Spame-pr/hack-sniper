@@ -172,6 +172,7 @@ func (s *Service) handleRPC(w http.ResponseWriter, r *http.Request) {
 
 				if err := s.notifyBotService(token, sender, txCallData); err != nil {
 					log.Printf("❌ Failed to notify bot service: %v", err)
+					return
 				}
 			}
 		}

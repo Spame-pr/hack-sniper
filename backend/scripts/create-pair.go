@@ -276,20 +276,10 @@ func main() {
 
 	// Configuration
 	proxyRPC := "http://localhost:8545" // Your RPC proxy
-	baseRPC := os.Getenv("BASE_SEPOLIA_RPC_URL")
-	if baseRPC == "" {
-		baseRPC = "https://sepolia.base.org"
-	}
+	baseRPC := os.Getenv("BASE_RPC_URL")
 
 	factoryAddress := os.Getenv("UNISWAP_V2_FACTORY")
-	if factoryAddress == "" {
-		factoryAddress = "0x7Ae58f10f7849cA6F5fB71b7f45CB416c9204b1e" // Base Sepolia Factory
-	}
-
 	routerAddress := os.Getenv("UNISWAP_V2_ROUTER")
-	if routerAddress == "" {
-		routerAddress = "0x1689E7B1F10000AE47eBfE339a4f69dECd19F602" // Base Sepolia Router
-	}
 
 	privateKeyHex := os.Getenv("ADMIN_PRIVATE_KEY")
 	if privateKeyHex == "" {
@@ -352,7 +342,7 @@ func main() {
 	// WETH on Base Sepolia
 	wethAddress := common.HexToAddress("0x4200000000000000000000000000000000000006") // WETH on Base
 	// Example token address (replace with your token)
-	tokenAddress := common.HexToAddress("0x885eD8891b6E18F013B38b54a717312B52a10486") // Replace with your token
+	tokenAddress := common.HexToAddress("0xc2159eCD56C1D0162D636e120F73939F0cb01aC5") // Replace with your token
 
 	fmt.Printf("🪙 Token A (WETH): %s\n", wethAddress.Hex())
 	fmt.Printf("🪙 Token B (Custom): %s\n", tokenAddress.Hex())

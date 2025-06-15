@@ -100,9 +100,6 @@ func (s *Service) Start() error {
 	// Add the LP_ADD notification endpoint
 	mux.HandleFunc("/api/lp-add", s.handleLPAddNotification)
 
-	// Add the LP_ADD notification endpoint
-	mux.HandleFunc("/api/test", s.processTest)
-
 	// Health check endpoint
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
@@ -198,13 +195,6 @@ func (s *Service) processLPAddAndCreateBundle(notification LPAddNotification) {
 
 	log.Printf("📊 Found %d pending snipes for token %s", len(snipes), notification.TokenAddress)
 
-	// Reconstruct LP_ADD transaction from call data
-	lpAddTx, err := s.reconstructLPAddTransaction(notification)
-	if err != nil {
-		log.Printf("❌ Failed to reconstruct LP_ADD transaction: %v", err)
-		return
-	}
-
 	// Convert database snipes to bundle format
 	bundleBids, err := s.convertSnipesToBundleBids(snipes)
 	if err != nil {
@@ -224,7 +214,7 @@ func (s *Service) processLPAddAndCreateBundle(notification LPAddNotification) {
 	}
 
 	// Create bundle transactions
-	bundleTxs, err := s.createBundleTransactions(ctx, lpAddTx, bundleBids, notification)
+	bundleTxs, err := s.createBundleTransactions(ctx, bundleBids, notification)
 	if err != nil {
 		log.Printf("❌ Failed to create bundle transactions: %v", err)
 		return
@@ -233,7 +223,7 @@ func (s *Service) processLPAddAndCreateBundle(notification LPAddNotification) {
 	log.Printf("📦 Created bundle with %d transactions (1 LP_ADD + %d snipes)", len(bundleTxs), len(bundleBids))
 
 	// Submit bundle to Base sequencer
-	s.submitBundle(ctx, bundleTxs)
+	s.submitBundle(ctx, notification.TxCallData, bundleTxs)
 
 	// Update snipe statuses to 'submitted'
 	for _, snipe := range snipes {
@@ -243,50 +233,6 @@ func (s *Service) processLPAddAndCreateBundle(notification LPAddNotification) {
 	}
 
 	log.Printf("✅ Bundle submitted successfully for token %s with %d snipes", notification.TokenAddress, len(snipes))
-}
-
-// reconstructLPAddTransaction reconstructs the LP_ADD transaction from call data
-func (s *Service) reconstructLPAddTransaction(notification LPAddNotification) (*types.Transaction, error) {
-	// Parse call data
-	callData := notification.TxCallData
-	if !strings.HasPrefix(callData, "0x") {
-		callData = "0x" + callData
-	}
-
-	data, err := hex.DecodeString(callData[2:])
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode call data: %v", err)
-	}
-
-	// Get current gas price and nonce for the creator
-	creatorAddr := common.HexToAddress(notification.CreatorAddress)
-	gasPrice, err := s.ethClient.Client.SuggestGasPrice(context.Background())
-	if err != nil {
-		return nil, fmt.Errorf("failed to get gas price: %v", err)
-	}
-
-	nonce, err := s.ethClient.Client.PendingNonceAt(context.Background(), creatorAddr)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get nonce: %v", err)
-	}
-
-	// Create the transaction (this is a simplified reconstruction)
-	// In a real implementation, you'd need to extract more details from the call data
-	routerAddr := common.HexToAddress(s.config.UniswapV2Router)
-
-	// Estimate ETH value from call data (this is simplified - you'd parse the actual parameters)
-	ethValue := big.NewInt(1000000000000000) // 0.001 ETH as default
-
-	tx := types.NewTransaction(
-		nonce,
-		routerAddr,
-		ethValue,
-		300000, // Gas limit
-		gasPrice,
-		data,
-	)
-
-	return tx, nil
 }
 
 // convertSnipesToBundleBids converts database snipes to bundle bid format
@@ -344,256 +290,7 @@ func (s *Service) parseETHAmount(amountStr string) (*big.Int, error) {
 }
 
 // createBundleTransactions creates the bundle transactions with proper gas pricing
-func (s *Service) createBundleTransactions(ctx context.Context, lpAddTx *types.Transaction, bids []*bundle.SnipeBid, notification LPAddNotification) ([]*types.Transaction, error) {
-	var transactions []*types.Transaction
-
-	// Add the LP_ADD transaction first
-	transactions = append(transactions, lpAddTx)
-
-	// Get base gas price from LP_ADD transaction
-	baseGasPrice := lpAddTx.GasPrice()
-	if baseGasPrice == nil {
-		var err error
-		baseGasPrice, err = s.ethClient.Client.SuggestGasPrice(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get gas price: %v", err)
-		}
-	}
-
-	// Create snipe transactions with decreasing gas prices
-	for i, bid := range bids {
-		// Calculate gas price (each subsequent tx has gasPrice = previous - 1 wei)
-		gasPrice := new(big.Int).Sub(baseGasPrice, big.NewInt(int64(i+1)))
-		minGasPrice := big.NewInt(1000000000) // 1 gwei minimum
-		if gasPrice.Cmp(minGasPrice) < 0 {
-			gasPrice = minGasPrice
-		}
-
-		// Note: Private key not needed for CreateSnipeTransaction as it only creates unsigned tx
-
-		// Get nonce for the sniper
-		nonce, err := s.ethClient.Client.PendingNonceAt(ctx, bid.Wallet)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get nonce for sniper %s: %v", bid.Wallet.Hex(), err)
-		}
-
-		// Extract creator address from notification
-		creatorAddr := common.HexToAddress(notification.CreatorAddress)
-		deadline := big.NewInt(time.Now().Add(5 * time.Minute).Unix())
-		amountOutMin := big.NewInt(1) // Minimum 1 wei of tokens (unlimited slippage)
-
-		// Get sniper contract from bundle manager
-		sniperContract := s.bundleManager.GetSniperContract()
-
-		snipeTx, err := sniperContract.CreateSnipeTransaction(
-			ctx,
-			bid.Wallet,
-			bid.TokenAddress,
-			creatorAddr,
-			bid.SwapAmount,
-			bid.BribeAmount,
-			amountOutMin,
-			deadline,
-			gasPrice,
-			nonce,
-		)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create snipe transaction for %s: %v", bid.Wallet.Hex(), err)
-		}
-
-		// Sign the transaction with the user's private key
-		privateKeyHex := bid.PrivateKey
-		if privateKeyHex == "" {
-			return nil, fmt.Errorf("private key not found for wallet %s", bid.Wallet.Hex())
-		}
-
-		// Remove 0x prefix if present
-		if strings.HasPrefix(privateKeyHex, "0x") {
-			privateKeyHex = privateKeyHex[2:]
-		}
-
-		privateKeyBytes, err := hex.DecodeString(privateKeyHex)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode private key for %s: %v", bid.Wallet.Hex(), err)
-		}
-
-		privateKey, err := crypto.ToECDSA(privateKeyBytes)
-		if err != nil {
-			return nil, fmt.Errorf("failed to parse private key for %s: %v", bid.Wallet.Hex(), err)
-		}
-
-		// Get chain ID for signing
-		chainID, err := s.ethClient.Client.ChainID(ctx)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get chain ID: %v", err)
-		}
-
-		// Sign the transaction
-		signedTx, err := types.SignTx(snipeTx, types.NewEIP155Signer(chainID), privateKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to sign transaction for %s: %v", bid.Wallet.Hex(), err)
-		}
-
-		log.Printf("✅ Transaction signed for wallet %s", bid.Wallet.Hex()[:10]+"...")
-		transactions = append(transactions, signedTx)
-	}
-
-	return transactions, nil
-}
-
-func (s *Service) submitBundle(ctx context.Context, transactions []*types.Transaction) {
-	for _, tx := range transactions {
-		err := s.submitTx(ctx, tx)
-		if err != nil {
-			log.Printf("failed to submit transaction: %v; hash: %s", err, tx.Hash().Hex())
-		}
-	}
-}
-
-func (s *Service) submitTx(ctx context.Context, transaction *types.Transaction) error {
-	// Convert transaction to raw hex string
-	rawTx, err := transaction.MarshalBinary()
-	if err != nil {
-		return fmt.Errorf("failed to marshal transaction: %v", err)
-	}
-	rawTxHex := "0x" + hex.EncodeToString(rawTx)
-
-	// Create eth_sendRawTransaction request
-	type RawTxRequest struct {
-		JSONRPC string   `json:"jsonrpc"`
-		Method  string   `json:"method"`
-		Params  []string `json:"params"`
-		ID      int      `json:"id"`
-	}
-
-	txReq := RawTxRequest{
-		JSONRPC: "2.0",
-		Method:  "eth_sendRawTransaction",
-		Params:  []string{rawTxHex},
-		ID:      1,
-	}
-
-	// Marshal request
-	reqBody, err := json.Marshal(txReq)
-	if err != nil {
-		return fmt.Errorf("failed to marshal transaction request: %v", err)
-	}
-
-	resp, err := http.Post(s.config.BaseSequencerRPCURL, "application/json", bytes.NewBuffer(reqBody))
-
-	if err != nil {
-		return fmt.Errorf("failed to submit transaction: %v", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	respBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("failed to read response body: %v", err)
-	}
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("transaction submission failed with status %d: %s", resp.StatusCode, string(respBody))
-	}
-
-	// Parse response to get transaction hash
-	type RawTxResponse struct {
-		JSONRPC string      `json:"jsonrpc"`
-		Result  string      `json:"result"`
-		Error   interface{} `json:"error"`
-		ID      int         `json:"id"`
-	}
-
-	var txResp RawTxResponse
-	if err := json.Unmarshal(respBody, &txResp); err != nil {
-		return fmt.Errorf("failed to parse response: %v", err)
-	}
-
-	if txResp.Error != nil {
-		return fmt.Errorf("transaction failed: %v", txResp.Error)
-	}
-
-	log.Printf("Transaction submitted successfully; Hash: %s", txResp.Result)
-
-	return nil
-}
-
-// Stop stops the API service
-func (s *Service) Stop() error {
-	// Gracefully shutdown HTTP server
-	if s.httpServer != nil {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-		return s.httpServer.Shutdown(ctx)
-	}
-
-	return nil
-}
-
-func (s *Service) processTest(w http.ResponseWriter, r *http.Request) {
-	notification := LPAddNotification{
-		TokenAddress:   "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-		CreatorAddress: "0x0049075f71D6735b4217bcA04e98634baf0acD10",
-		TxCallData:     "0x",
-	}
-	ctx := context.Background()
-
-	log.Printf("🔄 Processing LP_ADD for token %s", notification.TokenAddress)
-
-	// Get pending snipes for this token
-	snipes, err := s.db.GetSnipesByToken(notification.TokenAddress)
-	if err != nil {
-		log.Printf("❌ Failed to get snipes for token %s: %v", notification.TokenAddress, err)
-		return
-	}
-
-	if len(snipes) == 0 {
-		log.Printf("ℹ️ No pending snipes found for token %s", notification.TokenAddress)
-		return
-	}
-
-	log.Printf("📊 Found %d pending snipes for token %s", len(snipes), notification.TokenAddress)
-
-	// Convert database snipes to bundle format
-	bundleBids, err := s.convertSnipesToBundleBids(snipes)
-	if err != nil {
-		log.Printf("❌ Failed to convert snipes to bundle bids: %v", err)
-		return
-	}
-
-	// Sort bids by bribe amount (descending) - highest bribes first
-	sort.Slice(bundleBids, func(i, j int) bool {
-		return bundleBids[i].BribeAmount.Cmp(bundleBids[j].BribeAmount) > 0
-	})
-
-	log.Printf("💰 Sorted %d snipes by bribe amount (highest first)", len(bundleBids))
-	for i, bid := range bundleBids {
-		bribeETH := new(big.Float).Quo(new(big.Float).SetInt(bid.BribeAmount), big.NewFloat(1e18))
-		log.Printf("   %d. Wallet %s: %s ETH bribe", i+1, bid.Wallet.Hex()[:10]+"...", bribeETH.Text('f', 4))
-	}
-
-	// Create bundle transactions
-	bundleTxs, err := s.createBundleTransactionsTest(ctx, bundleBids, notification)
-	if err != nil {
-		log.Printf("❌ Failed to create bundle transactions: %v", err)
-		return
-	}
-
-	log.Printf("📦 Created bundle with %d transactions (1 LP_ADD + %d snipes)", len(bundleTxs), len(bundleBids))
-
-	// Submit bundle to Base sequencer
-	s.submitBundle(ctx, bundleTxs)
-
-	// Update snipe statuses to 'submitted'
-	for _, snipe := range snipes {
-		if err := s.db.UpdateSnipeStatus(snipe.ID, "submitted"); err != nil {
-			log.Printf("⚠️ Failed to update snipe status for ID %d: %v", snipe.ID, err)
-		}
-	}
-
-	log.Printf("✅ Bundle submitted successfully for token %s with %d snipes", notification.TokenAddress, len(snipes))
-}
-func (s *Service) createBundleTransactionsTest(ctx context.Context, bids []*bundle.SnipeBid, notification LPAddNotification) ([]*types.Transaction, error) {
+func (s *Service) createBundleTransactions(ctx context.Context, bids []*bundle.SnipeBid, notification LPAddNotification) ([]*types.Transaction, error) {
 	var transactions []*types.Transaction
 
 	// Get base fee for EIP-1559 transactions
@@ -742,4 +439,100 @@ func (s *Service) createBundleTransactionsTest(ctx context.Context, bids []*bund
 
 	log.Printf("📦 Created %d EIP-1559 transactions sorted by bribe size (highest to lowest)", len(transactions))
 	return transactions, nil
+}
+
+func (s *Service) submitBundle(ctx context.Context, addLiqRawTx string, transactions []*types.Transaction) {
+	err := s.submitTx(ctx, addLiqRawTx)
+	if err != nil {
+		log.Printf("failed to submit add liq transaction: %v", err)
+	}
+	time.Sleep(10 * time.Millisecond)
+
+	for _, tx := range transactions {
+		// Convert transaction to raw hex string
+		rawTx, err := tx.MarshalBinary()
+		if err != nil {
+			log.Printf("failed to submit transaction: %v; hash: %s", err, tx.Hash().Hex())
+			continue
+		}
+		rawTxHex := "0x" + hex.EncodeToString(rawTx)
+		err = s.submitTx(ctx, rawTxHex)
+		if err != nil {
+			log.Printf("failed to submit transaction: %v; hash: %s", err, tx.Hash().Hex())
+		}
+	}
+}
+
+func (s *Service) submitTx(ctx context.Context, rawTxHex string) error {
+
+	// Create eth_sendRawTransaction request
+	type RawTxRequest struct {
+		JSONRPC string   `json:"jsonrpc"`
+		Method  string   `json:"method"`
+		Params  []string `json:"params"`
+		ID      int      `json:"id"`
+	}
+
+	txReq := RawTxRequest{
+		JSONRPC: "2.0",
+		Method:  "eth_sendRawTransaction",
+		Params:  []string{rawTxHex},
+		ID:      1,
+	}
+
+	// Marshal request
+	reqBody, err := json.Marshal(txReq)
+	if err != nil {
+		return fmt.Errorf("failed to marshal transaction request: %v", err)
+	}
+
+	resp, err := http.Post(s.config.BaseSequencerRPCURL, "application/json", bytes.NewBuffer(reqBody))
+
+	if err != nil {
+		return fmt.Errorf("failed to submit transaction: %v", err)
+	}
+	defer resp.Body.Close()
+
+	// Read response body
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("failed to read response body: %v", err)
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("transaction submission failed with status %d: %s", resp.StatusCode, string(respBody))
+	}
+
+	// Parse response to get transaction hash
+	type RawTxResponse struct {
+		JSONRPC string      `json:"jsonrpc"`
+		Result  string      `json:"result"`
+		Error   interface{} `json:"error"`
+		ID      int         `json:"id"`
+	}
+
+	var txResp RawTxResponse
+	if err := json.Unmarshal(respBody, &txResp); err != nil {
+		return fmt.Errorf("failed to parse response: %v", err)
+	}
+
+	if txResp.Error != nil {
+		return fmt.Errorf("transaction failed: %v", txResp.Error)
+	}
+
+	log.Printf("Transaction submitted successfully; Hash: %s", txResp.Result)
+
+	return nil
+}
+
+// Stop stops the API service
+func (s *Service) Stop() error {
+	// Gracefully shutdown HTTP server
+	if s.httpServer != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return s.httpServer.Shutdown(ctx)
+	}
+
+	return nil
 }

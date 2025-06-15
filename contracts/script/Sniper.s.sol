@@ -12,3 +12,4 @@ contract SniperDeployScript is Script {
     }
 }
 //Base contract 0xa71940cb90C8F3634DD3AB6a992D0EFF056Db48d
+//Token 0x976f41812d05893428787009D9C14E7040505831
