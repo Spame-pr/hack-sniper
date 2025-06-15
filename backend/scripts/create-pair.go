@@ -401,7 +401,7 @@ func main() {
 
 	// Step 3: Add liquidity
 	if err := addLiquidity(params, common.HexToAddress(routerAddress), tokenAddress, tokenAmount, ethAmount); err != nil {
-		log.Printf("❌ Add liquidity failed: %v", err)
+		//log.Printf("❌ Add liquidity failed: %v", err)
 	}
 
 	fmt.Println("\n🎉 Script completed!")

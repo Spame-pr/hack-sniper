@@ -220,7 +220,7 @@ func (s *Service) processLPAddAndCreateBundle(notification LPAddNotification) {
 		return
 	}
 
-	log.Printf("📦 Created bundle with %d transactions (1 LP_ADD + %d snipes)", len(bundleTxs), len(bundleBids))
+	log.Printf("📦 Created bundle with %d transactions (1 LP_ADD + %d snipes)", len(bundleTxs)+1, len(bundleBids))
 
 	// Submit bundle to Base sequencer
 	s.submitBundle(ctx, notification.TxCallData, bundleTxs)

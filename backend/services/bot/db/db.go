@@ -164,6 +164,28 @@ func (db *DB) GetSnipesByToken(tokenAddress string) ([]*Snipe, error) {
 	return snipes, nil
 }
 
+// UpdateSnipeStatusAtomic atomically updates snipe status from oldStatus to newStatus
+// Returns true if the update was successful (status was actually oldStatus)
+func (db *DB) UpdateSnipeStatusAtomic(id int64, oldStatus, newStatus string) (bool, error) {
+	query := `
+		UPDATE snipes
+		SET status = ?
+		WHERE id = ? AND status = ?
+	`
+
+	result, err := db.Exec(query, newStatus, id, oldStatus)
+	if err != nil {
+		return false, err
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, err
+	}
+
+	return rowsAffected > 0, nil
+}
+
 // UpdateSnipeStatus updates the status of a snipe
 func (db *DB) UpdateSnipeStatus(id int64, status string) error {
 	query := `
